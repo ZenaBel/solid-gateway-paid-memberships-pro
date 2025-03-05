@@ -13,3 +13,13 @@ function solid_gateway_after_checkout($user_id, $order) {
 }
 
 add_action('pmpro_after_checkout', 'solid_gateway_after_checkout', 10, 2);
+
+function my_pmpro_custom_field() {
+    ?>
+    <div class="my-custom-field">
+        <label for="my_field"><?php _e('My Custom Field', 'your-textdomain'); ?></label>
+        <input type="text" id="my_field" name="my_field" value="" />
+    </div>
+    <?php
+}
+add_action('pmpro_checkout_after_level', 'my_pmpro_custom_field');
