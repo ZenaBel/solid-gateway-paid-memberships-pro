@@ -15,8 +15,6 @@ if (!class_exists('PMProGateway_Solid')) {
 
     class PMProGateway_Solid extends PMProGateway
     {
-        private $api;
-
         /**
          * Конструктор
          */
@@ -38,8 +36,8 @@ if (!class_exists('PMProGateway_Solid')) {
             add_filter('pmpro_payment_options', [__CLASS__, 'pmpro_payment_options']);
             add_filter('pmpro_payment_option_fields', [__CLASS__, 'pmpro_payment_option_fields'], 10, 2);
 
-            add_action('wp_ajax_pmpro_solid_ipn', array(__CLASS__, 'pmpro_solid_ipn'));
-            add_action('wp_ajax_nopriv_pmpro_solid_ipn', array(__CLASS__, 'pmpro_solid_ipn'));
+            add_action('wp_ajax_pmpro_solid_hook', array(__CLASS__, 'pmpro_solid_hook'));
+            add_action('wp_ajax_nopriv_pmpro_solid_hook', array(__CLASS__, 'pmpro_solid_hook'));
 
             $gateway = pmpro_getGateway();
             if ($gateway == "solid") {
@@ -51,7 +49,9 @@ if (!class_exists('PMProGateway_Solid')) {
 
                 add_action('wp_enqueue_scripts', array(__CLASS__, 'pmpro_solidgate_enqueue_scripts'));
 
-                add_action('pmpro_checkout_confirmed', array(__CLASS__, 'pmpro_checkout_confirmed'), 10, 2);
+                add_action('pmpro_checkout_before_processing', array(__CLASS__, 'pmpro_checkout_before_processing'), 10, 2);
+
+                add_action('pmpro_save_membership_level', array(__CLASS__, 'pmpro_hide_level_from_levels_page_save'));
             }
         }
 
@@ -64,9 +64,9 @@ if (!class_exists('PMProGateway_Solid')) {
             return $gateways;
         }
 
-        public static function pmpro_payment_options($options)
+        static function getGatewayOptions(): array
         {
-            $my_options = [
+            return [
                 'solid_logging',
                 'solid_integration_type',
                 'solid_api_key',
@@ -74,9 +74,12 @@ if (!class_exists('PMProGateway_Solid')) {
                 'solid_webhook_public_key',
                 'solid_webhook_private_key',
                 'currency',
-                'tax_state',
-                'tax_rate'
             ];
+        }
+
+        public static function pmpro_payment_options($options)
+        {
+            $my_options = self::getGatewayOptions();
             return array_merge($options, $my_options);
         }
 
@@ -158,7 +161,9 @@ if (!class_exists('PMProGateway_Solid')) {
                         <?php esc_html_e('To setup your webhook, use the following URL as the webhook URL in your Solid Gateway dashboard.', 'pmpro'); ?>
                         <br/>
                         <br/>
-                        <code><?php echo admin_url("admin-ajax.php") . "?action=pmpro_solid_ipn"; ?></code>
+                        <code><?php echo admin_url("admin-ajax.php") . "?action=pmpro_solid_hook&type=order.updated"; ?></code>
+                        <br/>
+                        <code><?php echo admin_url("admin-ajax.php") . "?action=pmpro_solid_hook&type=subscribe.updated"; ?></code>
                     </p>
                 </td>
             </tr>
@@ -222,31 +227,13 @@ if (!class_exists('PMProGateway_Solid')) {
             return false;
         }
 
-        public function check_for_webhook()
+        private static function validate_signature(string $request_body): string
         {
-            if (!isset($_SERVER['REQUEST_METHOD'])
-                || ('POST' !== $_SERVER['REQUEST_METHOD'])
-                || !isset($_GET['solid-api'])
-                || ('solid_subscribe_hook' !== $_GET['solid-api'])
-            ) {
-                return;
-            }
-
-            $request_body = file_get_contents('php://input');
-            $request_headers = array_change_key_case($this->hooks->get_request_headers(), CASE_UPPER);
-
-            WC_Solid_Subscribe_Logger::debug('Incoming webhook: ' . print_r($request_headers, true) . "\n" . print_r($request_body, true));
-            if ($request_headers['SIGNATURE'] == $this->validate_signature($request_body)) {
-                WC_Solid_Subscribe_Logger::debug('Incoming webhook123: ' . print_r($_GET['type'], true) . "\n" . print_r($request_headers, true) . "\n" . print_r($request_body, true));
-                $this->hooks->process_webhook($_GET['type'], $request_body);
-                status_header(200);
-            } else {
-                WC_Solid_Subscribe_Logger::debug('Incoming webhook failed validation: ' . print_r($request_body, true));
-
-                status_header(204);
-            }
-            exit;
-
+            return base64_encode(
+                hash_hmac('sha512',
+                    pmpro_getOption('solid_webhook_public_key') . $request_body . pmpro_getOption('solid_webhook_public_key'),
+                    pmpro_getOption('solid_webhook_private_key'))
+            );
         }
 
         public static function pmpro_solidgate_enqueue_scripts()
@@ -267,23 +254,12 @@ if (!class_exists('PMProGateway_Solid')) {
             wp_enqueue_script('pmpro_solid');
         }
 
-        /**
-         * Основний метод для обробки одноразових платежів
-         */
-        public function process(&$order): bool
-        {
-            $order->status = 'pending';
-            $order->saveOrder();
-
-            return true;
-        }
-
         private static function get_solid_order_body(MemberOrder $order): array
         {
             global $pmpro_currency;
 
             return [
-                'order_id' => $order->getRandomCode(),
+                'order_id' => $order->code,
                 'currency' => $pmpro_currency,
                 'amount' => round($order->total * 100),
                 'order_description' => $order->membership_level->name,
@@ -293,6 +269,7 @@ if (!class_exists('PMProGateway_Solid')) {
                 'type' => 'auth',
                 'order_number' => (int)$order->id,
                 'settle_interval' => 120,
+                'force3ds' => true,
 //                'customer_email' => $order->get_billing_email(),
 //                'customer_first_name' => $order->get_billing_first_name(),
 //                'customer_last_name' => $order->get_billing_last_name(),
@@ -300,18 +277,24 @@ if (!class_exists('PMProGateway_Solid')) {
 
         }
 
-        public static function pmpro_checkout_confirmed($pmpro_confirmed, $order)
+        public static function pmpro_checkout_before_processing()
         {
-            if (!$pmpro_confirmed) {
-                return;
-            }
+            global $pmpro_review;
 
             $api = new Api(pmpro_getOption('solid_api_key'), pmpro_getOption('solid_api_secret'));
 
+            /**
+             * @var MemberOrder $order
+             */
+            $order = $pmpro_review;
+
+            $order->status = 'pending';
+
+            $order->saveOrder();
+
             $order_body = self::get_solid_order_body($order);
-            $nonce = wp_create_nonce('s_checkout_nonce');
-            $order_body['success_url'] = admin_url("admin-ajax.php") . '?action=pmpro_solid_ipn&order_id=' . $order->getRandomCode() . '&_wpnonce=' . $nonce . '&status=success';
-            $order_body['fail_url'] = admin_url("admin-ajax.php") . '?action=pmpro_solid_ipn&order_id=' . $order->getRandomCode() . '&_wpnonce=' . $nonce . '&status=fail';
+            $order_body['success_url'] = pmpro_url("confirmation", "?level=" . $order->membership_level->id . "&order_id=" . $order->getRandomCode());
+            $order_body['fail_url'] = pmpro_url("checkout", "?level=" . $order->membership_level->id . "&error=Failed&order_id=" . $order->getRandomCode());
 
             $page_customization = [
                 'public_name' => 'Solid Gateway',
@@ -352,60 +335,143 @@ if (!class_exists('PMProGateway_Solid')) {
                     $response_body = json_decode($response['body'], true);
                     if ($response_body['url']) {
                         wp_redirect($response_body['url']);
-                        exit();
                     } elseif ($response_body['error']['code']) {
-                        wc_add_notice('Connection error. [' . $response_body['error']['code'] . ']', 'error');
+                        wp_redirect(pmpro_url("checkout", "?level=" . $order->membership_level->id . "&error=" . $response_body['error']['code']));
                     } else {
-                        wc_add_notice('Please try again.', 'error');
+                        wp_redirect(pmpro_url("checkout", "?level=" . $order->membership_level->id . "&error=unknown"));
                     }
-                    exit;
                 } else {
-                    wc_add_notice('Connection error.', 'error');
+                    wp_redirect(pmpro_url("checkout", "?level=" . $order->membership_level->id . "&error=unknown"));
                 }
-
+                exit();
             }
         }
 
-        function update(&$order)
+        static function pmpro_solid_hook()
         {
-            dd($order);
-        }
-
-        function cancel_subscription($subscription)
-        {
-            dd($subscription);
-        }
-
-        function check_token_order($order)
-        {
-            dd($order);
-        }
-
-        static function pmpro_added_membership_level($level_id, $user_id, $old_levels, $cancel_level)
-        {
-            error_log("Зміна членства: Новий рівень - $level_id, Користувач - $user_id");
-            dd($level_id, $user_id, $old_levels, $cancel_level);
-        }
-
-        static function pmpro_solid_ipn()
-        {
-            if (!isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], 's_checkout_nonce')) {
-                wp_send_json_error(['message' => 'Invalid nonce']);
+            if (!isset($_SERVER['REQUEST_METHOD'])
+                || ('POST' !== $_SERVER['REQUEST_METHOD'])
+                || !isset($_GET['type'])
+                || !in_array($_GET['type'], ['order.updated', 'subscribe.updated'])
+            ) {
+                return;
             }
 
-            $order_id = $_GET['order_id'];
-            $status = $_GET['status'];
+            $hook = new PMProGateway_Solid_Hooks();
 
-            $order = new MemberOrder($order_id);
-            if ($status === 'success') {
-                $order->updateStatus('success');
+            $request_body = file_get_contents('php://input');
+            $request_headers = array_change_key_case($hook->get_request_headers(), CASE_UPPER);
+            $type = $_GET['type'];
+
+            if ($request_headers['SIGNATURE'] == self::validate_signature($request_body)) {
+                PMProGateway_Solid_Logger::debug('Incoming webhook: ' . print_r($request_headers, true) . "\n" . print_r($request_body, true));
+                $hook->process_webhook($type, $request_body);
+                status_header(200);
             } else {
-                $order->updateStatus('error');
-            }
+                PMProGateway_Solid_Logger::debug('Incoming webhook failed validation: ' . print_r($request_body, true));
 
-            wp_send_json_success(['message' => 'Order status updated']);
+                status_header(204);
+            }
+            exit;
         }
 
+        static function pmpro_hide_level_from_levels_page_save($level_id)
+        {
+            global $pmpro_currency;
+
+            if (PMProGateway_Solid_Product_Model::get_product_mapping_by_product_id($level_id)) {
+                return;
+            }
+
+            $api = new Api(pmpro_getOption('solid_api_key'), pmpro_getOption('solid_api_secret'));
+
+            $is_subscription = $_REQUEST['recurring'] === 'yes';
+
+            if (!$is_subscription) {
+                return;
+            }
+
+            $name = $_REQUEST['name'];
+            $description = $_REQUEST['description'];
+            $cycle_number = $_REQUEST['cycle_number'];
+            $cycle_period = $_REQUEST['cycle_period'];
+            $billing_limit = $_REQUEST['billing_limit'];
+            $billing_amount = $_REQUEST['billing_amount'];
+            $trial_amount = $_REQUEST['trial_amount'];
+
+            $is_trial = $_REQUEST['custom_trial'] === 'yes';
+
+            $body = [
+                'name' => $name,
+                'description' => empty($description) ? $name : $description,
+                'status' => 'active',
+                'payment_action' => 'auth_settle',
+                'settle_interval' => 48,
+                'billing_period' => [
+                    'unit' => strtolower($cycle_period),
+                    'value' => intval($cycle_number),
+                ],
+            ];
+
+            if ($billing_limit > 0) {
+                $body['term_length'] = $billing_limit;
+            }
+
+            if ($is_trial) {
+                $body['trial'] = [
+                    'billing_period' => [
+                        'unit' => strtolower($cycle_period),
+                        'value' => intval($cycle_number),
+                    ],
+                ];
+
+                if ($trial_amount > 0) {
+                    $body['trial']['payment_action'] = 'auth_settle';
+                    $body['trial']['settle_interval'] = 48;
+                } else {
+                    $body['trial']['payment_action'] = 'auth_void';
+                }
+            }
+
+            $response = $api->addProduct($body);
+            $product = json_decode($response, true);
+
+            if (isset($product['error'])) {
+                $error = $product['error'];
+                $error_message = $error['message'] . ' (' . $error['code'] . ')';
+                PMProGateway_Solid_Logger::debug('Error creating product: ' . $error_message);
+                return;
+            }
+
+            $product_uuid = $product['id'];
+
+            PMProGateway_Solid_Product_Model::create_product_mapping($level_id, $product_uuid);
+
+            $bodyPrice = [
+                'default' => true,
+                'status' => 'active',
+                'product_price' => (int)($billing_amount * 100),
+                'currency' => $pmpro_currency,
+            ];
+
+            if ($is_trial) {
+                $bodyPrice['trial_price'] = (int)($trial_amount * 100);
+            }
+
+            if (!empty($product_uuid)) {
+                $response = $api->addPrice($product_uuid, $bodyPrice);
+                $price = json_decode($response, true);
+
+                if (isset($price['error'])) {
+                    $error = $price['error'];
+                    $error_message = $error['message'] . ' (' . $error['code'] . ')';
+                    PMProGateway_Solid_Logger::debug('Error creating price: ' . $error_message);
+                    return;
+                }
+            } else {
+                PMProGateway_Solid_Logger::debug('Product UUID is empty');
+            }
+        }
 
     }
 }
