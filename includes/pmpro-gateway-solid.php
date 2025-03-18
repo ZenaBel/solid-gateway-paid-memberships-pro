@@ -258,22 +258,48 @@ if (!class_exists('PMProGateway_Solid')) {
         {
             global $pmpro_currency;
 
-            return [
-                'order_id' => $order->code,
-                'currency' => $pmpro_currency,
-                'amount' => round($order->total * 100),
-                'order_description' => $order->membership_level->name,
-                'website' => get_home_url(),
-                'google_pay_allowed_auth_methods' => ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
-//                'order_items' => $items_str,
-                'type' => 'auth',
+            $membershipLevel = $order->getMembershipLevel();
+
+            $code = $order->getRandomCode();
+
+            $is_subscription = self::is_subscription($order);
+
+            if ($is_subscription) {
+                $subscription_product_id = PMProGateway_Solid_Product_Model::get_product_mapping_by_product_id($order->membership_id)->uuid;
+
+                $order_description = $membershipLevel->name . ' - Subscription';
+            } else {
+                $order_description = empty($membershipLevel->description) ? $membershipLevel->name : $membershipLevel->description;
+            }
+
+            $order_data = [
+                'order_id' => $code,
+                'order_description' => $order_description,
                 'order_number' => (int)$order->id,
+                'type' => 'auth',
                 'settle_interval' => 120,
+                'customer_email' => $order->getUser()->user_email,
+                'website' => get_home_url(),
                 'force3ds' => true,
-//                'customer_email' => $order->get_billing_email(),
-//                'customer_first_name' => $order->get_billing_first_name(),
-//                'customer_last_name' => $order->get_billing_last_name(),
+                'google_pay_allowed_auth_methods' => ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
             ];
+
+            if ($is_subscription) {
+                $order_data['product_id'] = $subscription_product_id;
+                $order_data['product_price_id'] = $subscription_product_id;
+                $order_data['customer_account_id'] = $order->user_id;
+                $order_data['order_metadata'] = [
+                    'order_id' => $order->id,
+                    'membership_id' => $order->membership_id,
+                    'user_id' => $order->user_id,
+                    'gateway_environment' => pmpro_getOption('gateway_environment'),
+                ];
+            } else {
+                $order_data['currency'] = $pmpro_currency;
+                $order_data['amount'] = round($order->total * 100);
+            }
+
+            return $order_data;
 
         }
 
@@ -288,7 +314,9 @@ if (!class_exists('PMProGateway_Solid')) {
              */
             $order = $pmpro_review;
 
-            $order->status = 'pending';
+            if (!self::is_subscription($order)) {
+                $order->status = 'pending';
+            }
 
             $order->saveOrder();
 
@@ -471,6 +499,15 @@ if (!class_exists('PMProGateway_Solid')) {
             } else {
                 PMProGateway_Solid_Logger::debug('Product UUID is empty');
             }
+        }
+
+        private static function is_subscription(MemberOrder $order): bool
+        {
+            if ($order->getMembershipLevel()->initial_payment == 0) {
+                return true;
+            }
+
+            return false;
         }
 
     }
