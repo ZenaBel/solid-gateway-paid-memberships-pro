@@ -204,7 +204,7 @@ if (!class_exists('PMProGateway_Solid')) {
             return $fields;
         }
 
-        public static function pmpro_checkout_default_submit_button($show)
+        public static function pmpro_checkout_default_submit_button($show): bool
         {
             global $gateway, $pmpro_requirebilling;
 
@@ -510,5 +510,62 @@ if (!class_exists('PMProGateway_Solid')) {
             return false;
         }
 
+        function cancel_subscription($subscription): bool
+        {
+            $api = new Api(pmpro_getOption('solid_api_key'), pmpro_getOption('solid_api_secret'));
+
+            $data = [
+                'subscription_id' => $subscription->get_subscription_transaction_id(),
+                'force' => true,
+                'cancel_code' => '8.06',
+            ];
+
+            $response = $api->cancelSubscription($data);
+
+            PMProGateway_Solid_Logger::debug('Cancel subscription response: ' . print_r($response, true));
+
+            if (!is_wp_error($response)) {
+                $body = json_decode($response, true);
+                if ($body['status'] === 'ok') {
+                    $subscription->set('status', 'cancelled');
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /**
+         * @param $subscription PMPro_Subscription
+         * @return void
+         */
+        public function update_subscription_info($subscription)
+        {
+            $api = new Api(pmpro_getOption('solid_api_key'), pmpro_getOption('solid_api_secret'));
+
+            $status = $api->getSubscriptionStatus([
+                'subscription_id' => $subscription->get_subscription_transaction_id(),
+            ]);
+
+            if (!is_wp_error($status)) {
+                $body = json_decode($status, true);
+                if ($body['subscription']['status'] === 'cancelled') {
+                    $subscription->set('status', $body['subscription']['status']);
+                    $subscription->set('enddate', $body['subscription']['cancelled_at']);
+                    $subscription->set('next_payment_date', '0000-00-00 00:00:00');
+                } elseif ($body['subscription']['status'] === 'active') {
+                    $subscription->set('status', $body['subscription']['status']);
+                    $subscription->set('enddate', '0000-00-00 00:00:00');
+                    $subscription->set('next_payment_date', $body['subscription']['next_charge_at']);
+                } elseif ($body['subscription']['status'] === 'paused') {
+                    $subscription->set('status', 'active');
+                    $subscription->set('enddate', '0000-00-00 00:00:00');
+                    $subscription->set('next_payment_date', '0000-00-00 00:00:00');
+                }
+                $subscription->save();
+            } else {
+                PMProGateway_Solid_Logger::debug('Error getting subscription status: ' . print_r($status, true));
+                $subscription->set('status', 'sync_error');
+            }
+        }
     }
 }
