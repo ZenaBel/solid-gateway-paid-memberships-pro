@@ -123,6 +123,9 @@ class PMProGateway_Solid_Hooks
                     case 'pause_schedule.delete':
                         $this->process_pause_schedule_delete( $notification );
                         break;
+                    case 'order_update':
+                        $this->process_order_update( $notification );
+                        break;
                     default:
                         PMProGateway_Solid_Logger::debug( sprintf( 'Необработанный hook: %1$s -> %2$s', $type, $notification->callback_type ) );
                         break;
@@ -166,7 +169,6 @@ class PMProGateway_Solid_Hooks
             'ip_address' => $_SERVER['REMOTE_ADDR'],
             'platform' => 'WEB',
             'order_metadata' => [
-                'subscription_id' => $subscription_id,
                 'order_id' => $order->id,
                 'user_id' => $order->user_id,
                 'membership_id' => $order->membership_id,
@@ -193,7 +195,7 @@ class PMProGateway_Solid_Hooks
 
             PMProGateway_Solid_Logger::debug( sprintf( 'Создание подписки: %1$s', print_r($response, true) ) );
         } else {
-            PMProGateway_Solid_Logger::debug( sprintf( 'Ошибка создания подписки: %1$s', $response->error ) );
+            PMProGateway_Solid_Logger::debug( sprintf( 'Ошибка создания подписки: %1$s', $response ) );
         }
     }
 
@@ -242,11 +244,112 @@ class PMProGateway_Solid_Hooks
         $subscription->set('initial_payment', $membershipLevel->initial_payment);
         $subscription_id = $subscription->save();
 
+        if ( function_exists('pmpro_changeMembershipLevel') ) {
+            pmpro_changeMembershipLevel($membershipLevel->id, $notification->customer->customer_account_id);
+        }
+
         if ( ! $subscription_id ) {
             PMProGateway_Solid_Logger::debug( sprintf( 'Ошибка создания подписки: %1$s', print_r($subscription, true) ) );
             return;
         }
 
         PMProGateway_Solid_Logger::debug( sprintf( 'Создание подписки: %1$s', print_r($subscription, true) ) );
+    }
+
+    private function process_order_update($notification)
+    {
+        PMProGateway_Solid_Logger::debug( sprintf( 'Обновление заказа: %1$s', $notification->order->status ) );
+
+        $invoice = current($notification->invoices);
+
+        $order_id = current($invoice->orders);
+
+        if ( ! $order_id ) {
+            PMProGateway_Solid_Logger::debug( sprintf( 'Не удалось получить ID заказа: %1$s', print_r($invoice, true) ) );
+            return;
+        }
+
+        $order = new MemberOrder($order_id->id);
+
+        if ( ! $order ) {
+            PMProGateway_Solid_Logger::debug( sprintf( 'Не удалось получить заказ: %1$s', print_r($invoice, true) ) );
+            return;
+        }
+
+
+
+        $order = new MemberOrder($notification->order->order_id);
+
+        $order->payment_transaction_id = current($notification->transactions)->card->card_token->token;
+        $order->status = 'success';
+        $order->updateStatus('success');
+        $order->saveOrder();
+    }
+
+    private function process_cancel_subscription($notification)
+    {
+        PMProGateway_Solid_Logger::debug( sprintf( 'Отмена подписки: %1$s', $notification->order->status ) );
+
+        $subscription = PMPro_Subscription::get_subscription_from_subscription_transaction_id($notification->subscription->id, 'solid', pmpro_getOption('gateway_environment'));
+
+        $subscription->set('status', 'cancelled');
+        $subscription->set('enddate', $notification->subscription->cancelled_at);
+        $subscription->set('next_payment_date', '0000-00-00 00:00:00');
+        $s = $subscription->save();
+
+        if ( ! $s ) {
+            PMProGateway_Solid_Logger::debug( sprintf( 'Не удалось отменить подписку: %1$s', print_r($subscription, true) ) );
+            return;
+        }
+
+        if ( function_exists('pmpro_changeMembershipLevel') ) {
+            pmpro_changeMembershipLevel($subscription->get_membership_level_id(), $subscription->get_user_id());
+        }
+    }
+
+    private function process_renew_subscription($notification)
+    {
+        PMProGateway_Solid_Logger::debug( sprintf( 'Продление подписки: %1$s', $notification->order->status ) );
+
+        $subscription = PMPro_Subscription::get_subscription_from_subscription_transaction_id($notification->subscription->id, 'solid', pmpro_getOption('gateway_environment'));
+
+        PMProGateway_Solid_Logger::debug( sprintf( 'Подписка: %1$s', print_r($subscription, true) ) );
+
+        $subscription->set('status', 'active');
+        $subscription->set('enddate', '0000-00-00 00:00:00');
+        $subscription->set('next_payment_date', $notification->subscription->next_charge_at);
+        $s = $subscription->save();
+
+        if ( ! $s ) {
+            PMProGateway_Solid_Logger::debug( sprintf( 'Не удалось продлить подписку: %1$s', print_r($subscription, true) ) );
+            return;
+        }
+
+        if ( function_exists('pmpro_changeMembershipLevel') ) {
+            pmpro_changeMembershipLevel($subscription->get_membership_level_id(), $subscription->get_user_id());
+        }
+    }
+
+    private function process_expire_subscription($notification)
+    {
+        PMProGateway_Solid_Logger::debug( sprintf( 'Истечение подписки: %1$s', $notification->order->status ) );
+
+        $subscription = PMPro_Subscription::get_subscription_from_subscription_transaction_id($notification->subscription->id, 'solid', pmpro_getOption('gateway_environment'));
+
+        PMProGateway_Solid_Logger::debug( sprintf( 'Подписка: %1$s', print_r($subscription, true) ) );
+
+        $subscription->set('status', 'cancelled');
+        $subscription->set('enddate', $notification->subscription->expired_at);
+        $subscription->set('next_payment_date', '0000-00-00 00:00:00');
+        $s = $subscription->save();
+
+        if ( ! $s ) {
+            PMProGateway_Solid_Logger::debug( sprintf( 'Не удалось истечь подписку: %1$s', print_r($subscription, true) ) );
+            return;
+        }
+
+        if ( function_exists('pmpro_changeMembershipLevel') ) {
+            pmpro_changeMembershipLevel($subscription->get_membership_level_id(), $subscription->get_user_id());
+        }
     }
 }
