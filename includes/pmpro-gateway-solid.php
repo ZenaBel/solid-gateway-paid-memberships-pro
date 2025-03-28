@@ -39,6 +39,12 @@ if (!class_exists('PMProGateway_Solid')) {
             add_action('wp_ajax_pmpro_solid_hook', array(__CLASS__, 'pmpro_solid_hook'));
             add_action('wp_ajax_nopriv_pmpro_solid_hook', array(__CLASS__, 'pmpro_solid_hook'));
 
+            add_action('wp_ajax_get_solid_gateway_restore_button', array(__CLASS__, 'get_solid_gateway_restore_button'));
+            add_action('wp_ajax_nopriv_get_solid_gateway_restore_button', array(__CLASS__, 'get_solid_gateway_restore_button'));
+
+            add_action('wp_ajax_solid_restore_subscription', array(__CLASS__, 'solid_restore_subscription'));
+            add_action('wp_ajax_nopriv_solid_restore_subscription', array(__CLASS__, 'solid_restore_subscription'));
+
             $gateway = pmpro_getGateway();
             if ($gateway == "solid") {
                 add_filter('pmpro_include_billing_address_fields', '__return_false');
@@ -234,24 +240,6 @@ if (!class_exists('PMProGateway_Solid')) {
                     pmpro_getOption('solid_webhook_public_key') . $request_body . pmpro_getOption('solid_webhook_public_key'),
                     pmpro_getOption('solid_webhook_private_key'))
             );
-        }
-
-        public static function pmpro_solidgate_enqueue_scripts()
-        {
-            wp_register_script('pmpro_solid',
-                dirname(plugin_dir_url(__FILE__)) . '/assets/js/script.js',
-                array('jquery'),
-                '1.0.0',
-                true
-            );
-
-            // Підключаємо скрипт
-            wp_localize_script('pmpro_solid', 'pmpro_solid', [
-                'ajax_url' => admin_url('admin-ajax.php'),
-                'nonce' => wp_create_nonce('pmpro_solid_nonce')
-            ]);
-
-            wp_enqueue_script('pmpro_solid');
         }
 
         private static function get_solid_order_body(MemberOrder $order): array
@@ -499,6 +487,59 @@ if (!class_exists('PMProGateway_Solid')) {
             } else {
                 PMProGateway_Solid_Logger::debug('Product UUID is empty');
             }
+        }
+
+        public static function get_solid_gateway_restore_button()
+        {
+            $id = $_POST['id'];
+            $subscription = new PMPro_Subscription($id);
+
+            $response = [
+                'status' => 'failed',
+            ];
+
+            if ($subscription->get_status() == 'cancelled' && $subscription->get_gateway() == 'solid') {
+                $response['status'] = 'success';
+                // Запит на відновлення підписки такой на хук в плагіні Solid
+                $response['restore_url'] = admin_url('admin-ajax.php') . '?action=solid_restore_subscription&subscription_id=' . $id;
+                if (wp_doing_ajax()) {
+                    echo json_encode($response);
+                    wp_die();
+                }
+                return true;
+            }
+
+            if (wp_doing_ajax()) {
+                echo json_encode($response);
+                wp_die();
+            }
+            return false;
+        }
+
+        public static function solid_restore_subscription()
+        {
+            $subscription_id = $_GET['subscription_id'];
+            $subscription = new PMPro_Subscription($subscription_id);
+
+            if ($subscription->get_status() == 'cancelled' && $subscription->get_gateway() == 'solid') {
+                $api = new Api(pmpro_getOption('solid_api_key'), pmpro_getOption('solid_api_secret'));
+
+                $response = $api->reactivateSubscription([
+                    'subscription_id' => $subscription->get_subscription_transaction_id(),
+                ]);
+
+                if (!is_wp_error($response)) {
+                    $body = json_decode($response, true);
+                    if ($body['status'] === 'ok') {
+                        $subscription->set('status', 'active');
+                        $subscription->save();
+                        wp_redirect($_SERVER['HTTP_REFERER']);
+                        exit;
+                    }
+                }
+            }
+            wp_redirect( $_SERVER['HTTP_REFERER'] );
+            exit;
         }
 
         private static function is_subscription(MemberOrder $order): bool

@@ -45,3 +45,45 @@
 //         }
 //     });
 // });
+jQuery(document).ready(function ($) {
+    const currentUrl = window.location.href;
+    if (currentUrl.includes('/wp-admin/admin.php') && currentUrl.includes('page=pmpro-subscriptions')) {
+        const urlParams = new URLSearchParams(currentUrl);
+        const subscriptionId = urlParams.get('id');
+
+        if (subscriptionId) {
+            const $button = $('<button/>', {
+                text: 'Restore',
+                class: 'page-title-action'
+            });
+            $.ajax({
+                url: pmpro_solid.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'get_solid_gateway_restore_button',
+                    id: subscriptionId
+                },
+                success: function (response) {
+                    response = JSON.parse(response);
+                    console.log(response);
+                    if (response.status === 'success') {
+                        $('.page-title-action.pmpro-has-icon-update').after($button);
+                        $button.attr('data-restore-url', response.restore_url);
+                        $button.on('click', function () {
+                            window.location.href = $(this).data('restore-url');
+                        });
+                    } else {
+                        console.error('Error fetching update URL:', response.data);
+                    }
+                },
+                error: function (xhr, status, error) {
+                    console.error('AJAX error:', error);
+                }
+            });
+        } else {
+            console.warn("ID subscription not found in URL.");
+        }
+    } else {
+        console.warn("Not on the correct page.  URL does not match.");
+    }
+});

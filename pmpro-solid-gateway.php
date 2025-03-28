@@ -8,7 +8,7 @@ Author: CoDi
 
 defined('ABSPATH') || exit;
 
-const PMPRO_GATEWAY_SOLID_VERSION = '0.0.1';
+const PMPRO_GATEWAY_SOLID_VERSION = '0.0.2';
 
 if ( file_exists(__DIR__ . '/vendor/autoload.php') ) {
     require_once __DIR__ . '/vendor/autoload.php';
@@ -29,7 +29,14 @@ add_action('init', function() {
 
 function solid_gateway_enqueue_admin_assets() {
     wp_enqueue_style('solid-gateway-admin-css', plugin_dir_url(__FILE__) . 'assets/css/style.css');
-    wp_enqueue_script('solid-gateway-admin-js', plugin_dir_url(__FILE__) . 'assets/js/script.js', array('jquery'), '1.0', true);
+    wp_register_script('solid-gateway-admin-js', plugin_dir_url(__FILE__) . 'assets/js/script.js', array('jquery'), '1.1', true);
+
+    wp_localize_script('solid-gateway-admin-js', 'pmpro_solid', [
+        'ajax_url' => admin_url('admin-ajax.php'),
+        'nonce' => wp_create_nonce('pmpro_solid_nonce')
+    ]);
+
+    wp_enqueue_script('solid-gateway-admin-js');
 }
 add_action('admin_enqueue_scripts', 'solid_gateway_enqueue_admin_assets');
 
