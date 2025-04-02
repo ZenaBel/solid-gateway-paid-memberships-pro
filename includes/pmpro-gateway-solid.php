@@ -39,21 +39,30 @@ if (!class_exists('PMProGateway_Solid')) {
             add_action('wp_ajax_pmpro_solid_hook', array(__CLASS__, 'pmpro_solid_hook'));
             add_action('wp_ajax_nopriv_pmpro_solid_hook', array(__CLASS__, 'pmpro_solid_hook'));
 
-            add_action('wp_ajax_get_solid_gateway_restore_button', array(__CLASS__, 'get_solid_gateway_restore_button'));
-            add_action('wp_ajax_nopriv_get_solid_gateway_restore_button', array(__CLASS__, 'get_solid_gateway_restore_button'));
+            add_action('wp_ajax_solid_gateway_subscription_info', array(__CLASS__, 'solid_gateway_subscription_info'));
+            add_action('wp_ajax_nopriv_solid_gateway_subscription_info', array(__CLASS__, 'solid_gateway_subscription_info'));
+
+            add_action('wp_ajax_solid_gateway_set_pause', array(__CLASS__, 'solid_gateway_set_pause'));
+            add_action('wp_ajax_nopriv_solid_gateway_set_pause', array(__CLASS__, 'solid_gateway_set_pause'));
+
+            add_action('wp_ajax_solid_gateway_cancel_pause', array(__CLASS__, 'solid_gateway_cancel_pause'));
+            add_action('wp_ajax_nopriv_solid_gateway_cancel_pause', array(__CLASS__, 'solid_gateway_cancel_pause'));
 
             add_action('wp_ajax_solid_restore_subscription', array(__CLASS__, 'solid_restore_subscription'));
             add_action('wp_ajax_nopriv_solid_restore_subscription', array(__CLASS__, 'solid_restore_subscription'));
+            add_action('wp_ajax_set_pause_dates', array(__CLASS__, 'my_pause_set_dates'));
 
             $gateway = pmpro_getGateway();
             if ($gateway == "solid") {
-                add_filter('pmpro_include_billing_address_fields', '__return_false');
+//                add_filter('pmpro_include_billing_address_fields', '__return_false');
                 add_filter('pmpro_required_billing_fields', [__CLASS__, 'pmpro_required_billing_fields']);
-                add_filter('pmpro_include_payment_information_fields', '__return_false', 20);
+//                add_filter('pmpro_include_payment_information_fields', '__return_false', 20);
+
+                if (pmpro_getOption('solid_integration_type') === 'integrated_form') {
+                    add_action('pmpro_billing_before_submit_button', array(__CLASS__, 'pmpro_billing_before_submit_button'));
+                }
 
                 add_filter('pmpro_checkout_default_submit_button', array(__CLASS__, 'pmpro_checkout_default_submit_button'));
-
-                add_action('wp_enqueue_scripts', array(__CLASS__, 'pmpro_solidgate_enqueue_scripts'));
 
                 add_action('pmpro_checkout_before_processing', array(__CLASS__, 'pmpro_checkout_before_processing'), 10, 2);
 
@@ -363,6 +372,18 @@ if (!class_exists('PMProGateway_Solid')) {
             }
         }
 
+        static function pmpro_billing_before_submit_button()
+        {
+            ?>
+            <div id="pmpro_solid_form"></div>
+            <script>
+                jQuery(document).ready(function () {
+                    jQuery('#pmpro_solid_form').html('<input type="hidden" name="solid_integration_type" value="integrated_form"/>');
+                });
+            </script>
+            <?php
+        }
+
         static function pmpro_solid_hook()
         {
             if (!isset($_SERVER['REQUEST_METHOD'])
@@ -489,31 +510,37 @@ if (!class_exists('PMProGateway_Solid')) {
             }
         }
 
-        public static function get_solid_gateway_restore_button()
+        public static function solid_gateway_subscription_info()
         {
             $id = $_POST['id'];
             $subscription = new PMPro_Subscription($id);
 
             $response = [
-                'status' => 'failed',
+                'allowed' => false,
+                'restore_url' => false,
+                'is_paused' => 0,
+                'paused_hidden' => true,
             ];
 
-            if ($subscription->get_status() == 'cancelled' && $subscription->get_gateway() == 'solid') {
-                $response['status'] = 'success';
-                // Запит на відновлення підписки такой на хук в плагіні Solid
-                $response['restore_url'] = admin_url('admin-ajax.php') . '?action=solid_restore_subscription&subscription_id=' . $id;
-                if (wp_doing_ajax()) {
-                    echo json_encode($response);
-                    wp_die();
-                }
-                return true;
+            if ($subscription->get_status() == 'cancelled') {
+                $restore_url = admin_url('admin-ajax.php') . '?action=solid_restore_subscription&subscription_id=' . $id;
+
+                $response['restore_url'] = $restore_url;
             }
 
-            if (wp_doing_ajax()) {
-                echo json_encode($response);
-                wp_die();
+            if ($subscription->get_status() == 'active') {
+                $is_paused = get_post_meta($id, '_solid_subscription_paused', true) === '1';
+                if ($is_paused) {
+                    $response['is_paused'] = 1;
+                }
+                $response['paused_hidden'] = false;
             }
-            return false;
+
+            if ($subscription->get_gateway() == 'solid') {
+                $response['allowed'] = true;
+            }
+
+            wp_send_json_success($response);
         }
 
         public static function solid_restore_subscription()
@@ -529,17 +556,14 @@ if (!class_exists('PMProGateway_Solid')) {
                 ]);
 
                 if (!is_wp_error($response)) {
-                    $body = json_decode($response, true);
-                    if ($body['status'] === 'ok') {
-                        $subscription->set('status', 'active');
-                        $subscription->save();
-                        wp_redirect($_SERVER['HTTP_REFERER']);
-                        exit;
-                    }
+                    $subscription->set('status', 'active');
+                    $subscription->save();
+                    wp_redirect($_SERVER['HTTP_REFERER']);
+                    wp_die();
                 }
             }
             wp_redirect( $_SERVER['HTTP_REFERER'] );
-            exit;
+            wp_die();
         }
 
         private static function is_subscription(MemberOrder $order): bool
@@ -607,6 +631,71 @@ if (!class_exists('PMProGateway_Solid')) {
                 PMProGateway_Solid_Logger::debug('Error getting subscription status: ' . print_r($status, true));
                 $subscription->set('status', 'sync_error');
             }
+        }
+
+        static function solid_gateway_set_pause() {
+            $start = sanitize_text_field($_POST['start_date']);
+            $end   = sanitize_text_field($_POST['end_date']);
+            $subscription_id = sanitize_text_field($_POST['subscription_id']);
+
+            $subscription = new PMPro_Subscription($subscription_id);
+
+            if (strtotime($end) <= strtotime($start)) {
+                wp_send_json_error('The end date should be the start date.');
+            }
+
+            if ($subscription->get_status() == 'active' && $subscription->get_gateway() == 'solid') {
+                $api = new Api(pmpro_getOption('solid_api_key'), pmpro_getOption('solid_api_secret'));
+
+                $data = [
+                    'start_point' => [
+                        'type' => 'specific_date',
+                        'date' => date('Y-m-d H:i:s', strtotime($start)),
+                    ],
+                    'stop_point' => [
+                        'type' => 'specific_date',
+                        'date' => date('Y-m-d H:i:s', strtotime($end)),
+                    ],
+                ];
+
+                $response = $api->pauseSchedule($subscription->get_subscription_transaction_id(), $data);
+
+                $response = json_decode($response, true);
+
+                if ($response['pause']['from_date']) {
+                    $subscription = new PMPro_Subscription($subscription_id);
+                    update_post_meta($subscription_id, '_solid_subscription_paused', 1);
+                    $subscription->save();
+                    wp_send_json_success('The pause is installed!');
+                } else {
+                    wp_send_json_error('Failed to keep pause. Try later.');
+                }
+                return;
+            }
+            wp_send_json_error('Subscription is not active or not using Solid Gateway.');
+        }
+
+        static function solid_gateway_cancel_pause() {
+            $subscription_id = sanitize_text_field($_POST['subscription_id']);
+
+            $subscription = new PMPro_Subscription($subscription_id);
+
+            if ($subscription->get_status() == 'active' && $subscription->get_gateway() == 'solid') {
+                $api = new Api(pmpro_getOption('solid_api_key'), pmpro_getOption('solid_api_secret'));
+
+                $response = $api->removePauseSchedule($subscription->get_subscription_transaction_id());
+
+                $response = json_decode($response, true);
+
+                if ($response['status']) {
+                    delete_post_meta($subscription_id, '_solid_subscription_paused');
+                    wp_send_json_success('The pause is cancelled!');
+                } else {
+                    wp_send_json_error('Failed to cancel pause. Try later.');
+                }
+                return;
+            }
+            wp_send_json_error('Subscription is not active or not using Solid Gateway.');
         }
     }
 }

@@ -29,7 +29,7 @@ add_action('init', function() {
 
 function solid_gateway_enqueue_admin_assets() {
     wp_enqueue_style('solid-gateway-admin-css', plugin_dir_url(__FILE__) . 'assets/css/style.css');
-    wp_register_script('solid-gateway-admin-js', plugin_dir_url(__FILE__) . 'assets/js/script.js', array('jquery'), '1.1', true);
+    wp_register_script('solid-gateway-admin-js', plugin_dir_url(__FILE__) . 'assets/js/script.js', array('jquery'), '1.2.2', true);
 
     wp_localize_script('solid-gateway-admin-js', 'pmpro_solid', [
         'ajax_url' => admin_url('admin-ajax.php'),
