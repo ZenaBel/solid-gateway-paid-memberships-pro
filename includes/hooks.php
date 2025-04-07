@@ -151,7 +151,7 @@ class PMProGateway_Solid_Hooks
             'order_id' => $code,
             'product_id' => PMProGateway_Solid_Product_Model::get_product_mapping_by_product_id($order->membership_id)->uuid,
             'currency' => $pmpro_currency,
-            'order_description' => empty($membershipLevel->description) ? $membershipLevel->name : $membershipLevel->description,
+            'order_description' => empty(trim($membershipLevel->description)) ? $membershipLevel->name : $membershipLevel->description ,
             'order_number' => $order->id,
             'type' => 'auth',
             'settle_interval' => 48,
@@ -176,7 +176,7 @@ class PMProGateway_Solid_Hooks
             ],
         ];
 
-        PMProGateway_Solid_Logger::debug(sprintf( 'Создание подписки: %1$s', print_r($body, true) ) );
+        PMProGateway_Solid_Logger::debug(sprintf( 'Создание подписки $body: %1$s', print_r($body, true) ) );
 
         $response = $api->recurring($body);
 

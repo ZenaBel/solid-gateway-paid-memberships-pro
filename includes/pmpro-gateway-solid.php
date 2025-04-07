@@ -54,12 +54,16 @@ if (!class_exists('PMProGateway_Solid')) {
 
             $gateway = pmpro_getGateway();
             if ($gateway == "solid") {
-//                add_filter('pmpro_include_billing_address_fields', '__return_false');
+                add_filter('pmpro_include_billing_address_fields', '__return_false');
                 add_filter('pmpro_required_billing_fields', [__CLASS__, 'pmpro_required_billing_fields']);
-//                add_filter('pmpro_include_payment_information_fields', '__return_false', 20);
+                add_filter('pmpro_include_payment_information_fields', '__return_false', 20);
 
                 if (pmpro_getOption('solid_integration_type') === 'integrated_form') {
-                    add_action('pmpro_billing_before_submit_button', array(__CLASS__, 'pmpro_billing_before_submit_button'));
+                    add_action('pmpro_checkout_before_submit_button', array(__CLASS__, 'pmpro_checkout_before_submit_button'));
+                    add_action('wp_enqueue_scripts', array(__CLASS__, 'solid_gateway_enqueue_admin_assets'));
+
+                    add_action('wp_ajax_solid_gateway_process', array(__CLASS__, 'pmpro_checkout_before_processing'));
+                    add_action('wp_ajax_nopriv_solid_gateway_process', array(__CLASS__, 'pmpro_checkout_before_processing'));
                 }
 
                 add_filter('pmpro_checkout_default_submit_button', array(__CLASS__, 'pmpro_checkout_default_submit_button'));
@@ -68,6 +72,35 @@ if (!class_exists('PMProGateway_Solid')) {
 
                 add_action('pmpro_save_membership_level', array(__CLASS__, 'pmpro_hide_level_from_levels_page_save'));
             }
+        }
+
+        public static function solid_gateway_enqueue_admin_assets() {
+            wp_enqueue_style( 'jquery-modal-style', 'https://cdnjs.cloudflare.com/ajax/libs/jquery-modal/0.9.1/jquery.modal.min.css');
+            wp_enqueue_script( 'jquery' );
+
+            wp_enqueue_script(
+                'solid-form-script',
+                'https://cdn.solidgate.com/js/solid-form.js',
+                [],
+                PMPRO_GATEWAY_SOLID_VERSION
+            );
+            wp_enqueue_script(
+                'jquery-modal',
+                'https://cdnjs.cloudflare.com/ajax/libs/jquery-modal/0.9.1/jquery.modal.min.js',
+                array(
+                    'jquery',
+                ),
+                PMPRO_GATEWAY_SOLID_VERSION
+            );
+
+            wp_register_script('solid-gateway-form-js', dirname(plugin_dir_url(__FILE__)) . '/assets/js/form.js', array('jquery'), '1.0.4', true);
+
+            wp_localize_script('solid-gateway-form-js', 'pmpro_solid', [
+                'checkout_url' => pmpro_url('checkout'),
+                'nonce' => wp_create_nonce('pmpro_solid_nonce')
+            ]);
+
+            wp_enqueue_script('solid-gateway-form-js');
         }
 
         // Приклад: фільтри для реєстрації шлюзу
@@ -257,7 +290,7 @@ if (!class_exists('PMProGateway_Solid')) {
 
             $membershipLevel = $order->getMembershipLevel();
 
-            $code = $order->getRandomCode();
+            $code = $order->code;
 
             $is_subscription = self::is_subscription($order);
 
@@ -329,7 +362,8 @@ if (!class_exists('PMProGateway_Solid')) {
 
             if (pmpro_getOption('solid_integration_type') === 'integrated_form') {
                 $response = $api->formMerchantData($order_body)->toArray();
-                return [
+
+                $json = [
                     'result' => 'success',
                     "form" => $response,
                     "redirects" => [
@@ -337,6 +371,11 @@ if (!class_exists('PMProGateway_Solid')) {
                         'fail_url' => $order_body['fail_url'],
                     ]
                 ];
+
+                $response = json_encode($json);
+
+                wp_send_json($response);
+                wp_die();
             } else {
                 $request_body = json_encode([
                     'order' => $order_body,
@@ -372,15 +411,14 @@ if (!class_exists('PMProGateway_Solid')) {
             }
         }
 
-        static function pmpro_billing_before_submit_button()
+        static function pmpro_checkout_before_submit_button()
         {
             ?>
-            <div id="pmpro_solid_form"></div>
-            <script>
-                jQuery(document).ready(function () {
-                    jQuery('#pmpro_solid_form').html('<input type="hidden" name="solid_integration_type" value="integrated_form"/>');
-                });
-            </script>
+            <div id="pmpro_solid_form">
+                <input type="hidden" name="solid_integration_type" value="integrated_form"/>
+                <div id="solid-checkout-modal" class="modal"></div>
+                <div id="solid-payment-form-container"></div>
+            </div>
             <?php
         }
 

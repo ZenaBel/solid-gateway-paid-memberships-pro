@@ -8,7 +8,7 @@ Author: CoDi
 
 defined('ABSPATH') || exit;
 
-const PMPRO_GATEWAY_SOLID_VERSION = '0.0.2';
+const PMPRO_GATEWAY_SOLID_VERSION = '0.0.3';
 
 if ( file_exists(__DIR__ . '/vendor/autoload.php') ) {
     require_once __DIR__ . '/vendor/autoload.php';
