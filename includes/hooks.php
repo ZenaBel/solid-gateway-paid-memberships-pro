@@ -352,4 +352,27 @@ class PMProGateway_Solid_Hooks
             pmpro_changeMembershipLevel($subscription->get_membership_level_id(), $subscription->get_user_id());
         }
     }
+
+    private function process_pause_schedule_create($notification)
+    {
+        PMProGateway_Solid_Logger::debug( sprintf( 'Создание расписания паузы: %1$s', $notification->order->status ) );
+
+        $subscription = PMPro_Subscription::get_subscription_from_subscription_transaction_id($notification->subscription->id, 'solid', pmpro_getOption('gateway_environment'));
+
+        PMProGateway_Solid_Logger::debug( sprintf( 'Подписка: %1$s', print_r($subscription, true) ) );
+
+        update_post_meta($subscription->get_id(), '_solid_subscription_paused', 1);
+    }
+
+    private function process_pause_schedule_delete($notification)
+    {
+        PMProGateway_Solid_Logger::debug( sprintf( 'Удаление расписания паузы: %1$s', $notification->order->status ) );
+
+        $subscription = PMPro_Subscription::get_subscription_from_subscription_transaction_id($notification->subscription->id, 'solid', pmpro_getOption('gateway_environment'));
+
+        PMProGateway_Solid_Logger::debug( sprintf( 'Подписка: %1$s', print_r($subscription, true) ) );
+
+        delete_post_meta($subscription->get_id(), '_solid_subscription_paused');
+
+    }
 }

@@ -701,9 +701,7 @@ if (!class_exists('PMProGateway_Solid')) {
                 $response = json_decode($response, true);
 
                 if ($response['pause']['from_date']) {
-                    $subscription = new PMPro_Subscription($subscription_id);
                     update_post_meta($subscription_id, '_solid_subscription_paused', 1);
-                    $subscription->save();
                     wp_send_json_success('The pause is installed!');
                 } else {
                     wp_send_json_error('Failed to keep pause. Try later.');
