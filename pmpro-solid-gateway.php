@@ -1,14 +1,14 @@
 <?php
 /*
-Plugin Name: PMPro Solid Gateway
-Description: Custom gateway for Paid Memberships Pro
-Version: 0.0.3
+Plugin Name: Solidgate Gateway for Paid Memberships Pro
+Description: Plugin to add Solidgate payment gateway into Paid Memberships Pro
+Version: 1.0.0
 Author: CoDi
 */
 
 defined('ABSPATH') || exit;
 
-const PMPRO_GATEWAY_SOLID_VERSION = '0.0.3';
+const PMPRO_GATEWAY_SOLID_VERSION = '1.0.0';
 
 if ( file_exists(__DIR__ . '/vendor/autoload.php') ) {
     require_once __DIR__ . '/vendor/autoload.php';
