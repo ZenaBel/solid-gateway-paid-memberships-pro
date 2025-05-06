@@ -26,7 +26,7 @@ class PMProGateway_Solid_Hooks
 
     private function process_webhook_auth($notification)
     {
-        PMProGateway_Solid_Logger::debug( sprintf( 'Webhook auth: %1$s', $notification->order->status ) );
+//        PMProGateway_Solid_Logger::debug( sprintf( 'Webhook auth: %1$s', $notification->order->status ) );
 
         $order = new MemberOrder($notification->order->order_id);
 
@@ -36,7 +36,7 @@ class PMProGateway_Solid_Hooks
 
     private function process_webhook_charge_approved($notification)
     {
-        PMProGateway_Solid_Logger::debug( sprintf( 'Webhook charge approved: %1$s', $notification->order->status ) );
+//        PMProGateway_Solid_Logger::debug( sprintf( 'Webhook charge approved: %1$s', $notification->order->status ) );
 
         $order = new MemberOrder($notification->order->order_id);
 
@@ -54,7 +54,7 @@ class PMProGateway_Solid_Hooks
 
     private function process_webhook_charge_declined($notification)
     {
-        PMProGateway_Solid_Logger::debug( sprintf( 'Webhook charge declined: %1$s', $notification->order->status ) );
+//        PMProGateway_Solid_Logger::debug( sprintf( 'Webhook charge declined: %1$s', $notification->order->status ) );
 
         $order = new MemberOrder($notification->order->order_id);
 
@@ -66,7 +66,7 @@ class PMProGateway_Solid_Hooks
 
     private function process_webhook_charge_refunded($notification)
     {
-        PMProGateway_Solid_Logger::debug( sprintf( 'Webhook charge refunded: %1$s', $notification->order->status ) );
+//        PMProGateway_Solid_Logger::debug( sprintf( 'Webhook charge refunded: %1$s', $notification->order->status ) );
 
         $order = new MemberOrder($notification->order->order_id);
 
@@ -96,7 +96,7 @@ class PMProGateway_Solid_Hooks
                         $this->process_webhook_charge_refunded( $notification );
                         break;
                     default:
-                        PMProGateway_Solid_Logger::debug( sprintf( 'Необработанный hook: %1$s -> %2$s', $type, $notification->order->status ) );
+//                        PMProGateway_Solid_Logger::debug( sprintf( 'Необработанный hook: %1$s -> %2$s', $type, $notification->order->status ) );
                         break;
                 }
                 break;
@@ -127,12 +127,12 @@ class PMProGateway_Solid_Hooks
                         $this->process_order_update( $notification );
                         break;
                     default:
-                        PMProGateway_Solid_Logger::debug( sprintf( 'Необработанный hook: %1$s -> %2$s', $type, $notification->callback_type ) );
+//                        PMProGateway_Solid_Logger::debug( sprintf( 'Необработанный hook: %1$s -> %2$s', $type, $notification->callback_type ) );
                         break;
                 }
                 break;
             default:
-                PMProGateway_Solid_Logger::debug( sprintf( 'Необработанный hook: %1$s',$type ) );
+//                PMProGateway_Solid_Logger::debug( sprintf( 'Необработанный hook: %1$s',$type ) );
                 break;
         }
     }
@@ -176,14 +176,14 @@ class PMProGateway_Solid_Hooks
             ],
         ];
 
-        PMProGateway_Solid_Logger::debug(sprintf( 'Создание подписки $body: %1$s', print_r($body, true) ) );
+//        PMProGateway_Solid_Logger::debug(sprintf( 'Создание подписки $body: %1$s', print_r($body, true) ) );
 
         $response = $api->recurring($body);
 
-        PMProGateway_Solid_Logger::debug(sprintf( 'Создание подписки: %1$s', print_r($response, true) ) );
+//        PMProGateway_Solid_Logger::debug(sprintf( 'Создание подписки: %1$s', print_r($response, true) ) );
 
         if ( ! empty( $response->error ) ) {
-            PMProGateway_Solid_Logger::debug( sprintf( 'Ошибка создания подписки: %1$s', print_r($response, true) ) );
+//            PMProGateway_Solid_Logger::debug( sprintf( 'Ошибка создания подписки: %1$s', print_r($response, true) ) );
             return;
         }
 
@@ -193,17 +193,17 @@ class PMProGateway_Solid_Hooks
             $order->updateStatus('success');
             $order->saveOrder();
 
-            PMProGateway_Solid_Logger::debug( sprintf( 'Создание подписки: %1$s', print_r($response, true) ) );
+//            PMProGateway_Solid_Logger::debug( sprintf( 'Создание подписки: %1$s', print_r($response, true) ) );
         } else {
-            PMProGateway_Solid_Logger::debug( sprintf( 'Ошибка создания подписки: %1$s', $response ) );
+//            PMProGateway_Solid_Logger::debug( sprintf( 'Ошибка создания подписки: %1$s', $response ) );
         }
     }
 
     private function subscription_create($notification)
     {
-        PMProGateway_Solid_Logger::debug( sprintf( 'Активація підписки: %1$s', $notification->order->status ) );
+//        PMProGateway_Solid_Logger::debug( sprintf( 'Активація підписки: %1$s', $notification->order->status ) );
 
-        PMProGateway_Solid_Logger::debug('Контент: ' . print_r($notification, true));
+//        PMProGateway_Solid_Logger::debug('Контент: ' . print_r($notification, true));
 
         $invoices = $notification->invoices;
         if (!empty($invoices)) {
@@ -249,30 +249,30 @@ class PMProGateway_Solid_Hooks
         }
 
         if ( ! $subscription_id ) {
-            PMProGateway_Solid_Logger::debug( sprintf( 'Ошибка создания подписки: %1$s', print_r($subscription, true) ) );
+//            PMProGateway_Solid_Logger::debug( sprintf( 'Ошибка создания подписки: %1$s', print_r($subscription, true) ) );
             return;
         }
 
-        PMProGateway_Solid_Logger::debug( sprintf( 'Создание подписки: %1$s', print_r($subscription, true) ) );
+//        PMProGateway_Solid_Logger::debug( sprintf( 'Создание подписки: %1$s', print_r($subscription, true) ) );
     }
 
     private function process_order_update($notification)
     {
-        PMProGateway_Solid_Logger::debug( sprintf( 'Обновление заказа: %1$s', $notification->order->status ) );
+//        PMProGateway_Solid_Logger::debug( sprintf( 'Обновление заказа: %1$s', $notification->order->status ) );
 
         $invoice = current($notification->invoices);
 
         $order_id = current($invoice->orders);
 
         if ( ! $order_id ) {
-            PMProGateway_Solid_Logger::debug( sprintf( 'Не удалось получить ID заказа: %1$s', print_r($invoice, true) ) );
+//            PMProGateway_Solid_Logger::debug( sprintf( 'Не удалось получить ID заказа: %1$s', print_r($invoice, true) ) );
             return;
         }
 
         $order = new MemberOrder($order_id->id);
 
         if ( ! $order ) {
-            PMProGateway_Solid_Logger::debug( sprintf( 'Не удалось получить заказ: %1$s', print_r($invoice, true) ) );
+//            PMProGateway_Solid_Logger::debug( sprintf( 'Не удалось получить заказ: %1$s', print_r($invoice, true) ) );
             return;
         }
 
@@ -288,7 +288,7 @@ class PMProGateway_Solid_Hooks
 
     private function process_cancel_subscription($notification)
     {
-        PMProGateway_Solid_Logger::debug( sprintf( 'Отмена подписки: %1$s', $notification->order->status ) );
+//        PMProGateway_Solid_Logger::debug( sprintf( 'Отмена подписки: %1$s', $notification->order->status ) );
 
         $subscription = PMPro_Subscription::get_subscription_from_subscription_transaction_id($notification->subscription->id, 'solid', pmpro_getOption('gateway_environment'));
 
@@ -298,7 +298,7 @@ class PMProGateway_Solid_Hooks
         $s = $subscription->save();
 
         if ( ! $s ) {
-            PMProGateway_Solid_Logger::debug( sprintf( 'Не удалось отменить подписку: %1$s', print_r($subscription, true) ) );
+//            PMProGateway_Solid_Logger::debug( sprintf( 'Не удалось отменить подписку: %1$s', print_r($subscription, true) ) );
             return;
         }
 
@@ -309,11 +309,11 @@ class PMProGateway_Solid_Hooks
 
     private function process_renew_subscription($notification)
     {
-        PMProGateway_Solid_Logger::debug( sprintf( 'Продление подписки: %1$s', $notification->order->status ) );
+//        PMProGateway_Solid_Logger::debug( sprintf( 'Продление подписки: %1$s', $notification->order->status ) );
 
         $subscription = PMPro_Subscription::get_subscription_from_subscription_transaction_id($notification->subscription->id, 'solid', pmpro_getOption('gateway_environment'));
 
-        PMProGateway_Solid_Logger::debug( sprintf( 'Подписка: %1$s', print_r($subscription, true) ) );
+//        PMProGateway_Solid_Logger::debug( sprintf( 'Подписка: %1$s', print_r($subscription, true) ) );
 
         $subscription->set('status', 'active');
         $subscription->set('enddate', '0000-00-00 00:00:00');
@@ -321,7 +321,7 @@ class PMProGateway_Solid_Hooks
         $s = $subscription->save();
 
         if ( ! $s ) {
-            PMProGateway_Solid_Logger::debug( sprintf( 'Не удалось продлить подписку: %1$s', print_r($subscription, true) ) );
+//            PMProGateway_Solid_Logger::debug( sprintf( 'Не удалось продлить подписку: %1$s', print_r($subscription, true) ) );
             return;
         }
 
@@ -332,11 +332,11 @@ class PMProGateway_Solid_Hooks
 
     private function process_expire_subscription($notification)
     {
-        PMProGateway_Solid_Logger::debug( sprintf( 'Истечение подписки: %1$s', $notification->order->status ) );
+//        PMProGateway_Solid_Logger::debug( sprintf( 'Истечение подписки: %1$s', $notification->order->status ) );
 
         $subscription = PMPro_Subscription::get_subscription_from_subscription_transaction_id($notification->subscription->id, 'solid', pmpro_getOption('gateway_environment'));
 
-        PMProGateway_Solid_Logger::debug( sprintf( 'Подписка: %1$s', print_r($subscription, true) ) );
+//        PMProGateway_Solid_Logger::debug( sprintf( 'Подписка: %1$s', print_r($subscription, true) ) );
 
         $subscription->set('status', 'cancelled');
         $subscription->set('enddate', $notification->subscription->expired_at);
@@ -344,7 +344,7 @@ class PMProGateway_Solid_Hooks
         $s = $subscription->save();
 
         if ( ! $s ) {
-            PMProGateway_Solid_Logger::debug( sprintf( 'Не удалось истечь подписку: %1$s', print_r($subscription, true) ) );
+//            PMProGateway_Solid_Logger::debug( sprintf( 'Не удалось истечь подписку: %1$s', print_r($subscription, true) ) );
             return;
         }
 
@@ -355,22 +355,22 @@ class PMProGateway_Solid_Hooks
 
     private function process_pause_schedule_create($notification)
     {
-        PMProGateway_Solid_Logger::debug( sprintf( 'Создание расписания паузы: %1$s', $notification->order->status ) );
+//        PMProGateway_Solid_Logger::debug( sprintf( 'Создание расписания паузы: %1$s', $notification->order->status ) );
 
         $subscription = PMPro_Subscription::get_subscription_from_subscription_transaction_id($notification->subscription->id, 'solid', pmpro_getOption('gateway_environment'));
 
-        PMProGateway_Solid_Logger::debug( sprintf( 'Подписка: %1$s', print_r($subscription, true) ) );
+//        PMProGateway_Solid_Logger::debug( sprintf( 'Подписка: %1$s', print_r($subscription, true) ) );
 
         update_post_meta($subscription->get_id(), '_solid_subscription_paused', 1);
     }
 
     private function process_pause_schedule_delete($notification)
     {
-        PMProGateway_Solid_Logger::debug( sprintf( 'Удаление расписания паузы: %1$s', $notification->order->status ) );
+//        PMProGateway_Solid_Logger::debug( sprintf( 'Удаление расписания паузы: %1$s', $notification->order->status ) );
 
         $subscription = PMPro_Subscription::get_subscription_from_subscription_transaction_id($notification->subscription->id, 'solid', pmpro_getOption('gateway_environment'));
 
-        PMProGateway_Solid_Logger::debug( sprintf( 'Подписка: %1$s', print_r($subscription, true) ) );
+//        PMProGateway_Solid_Logger::debug( sprintf( 'Подписка: %1$s', print_r($subscription, true) ) );
 
         delete_post_meta($subscription->get_id(), '_solid_subscription_paused');
 

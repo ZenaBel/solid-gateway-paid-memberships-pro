@@ -115,7 +115,7 @@ if (!class_exists('PMProGateway_Solid')) {
         static function getGatewayOptions(): array
         {
             return [
-                'solid_logging',
+//                'solid_logging',
                 'solid_integration_type',
                 'solid_api_key',
                 'solid_api_secret',
@@ -134,21 +134,21 @@ if (!class_exists('PMProGateway_Solid')) {
         public static function pmpro_payment_option_fields($values, $gateway)
         {
             ?>
-            <tr class="gateway gateway_solid" <?php if ($gateway !== 'solid') echo 'style="display: none;"'; ?>>
-                <th scope="row" valign="top">
-                    <label for="solid_logging">Logging:</label>
-                </th>
-                <td>
-                    <select id="solid_logging" name="solid_logging">
-                        <option value="no" <?php if ($values['solid_logging'] !== 'yes') echo 'selected="selected"'; ?>>
-                            No
-                        </option>
-                        <option value="yes" <?php if ($values['solid_logging'] === 'yes') echo 'selected="selected"'; ?>>
-                            Yes
-                        </option>
-                    </select>
-                </td>
-            </tr>
+<!--            <tr class="gateway gateway_solid" --><?php //if ($gateway !== 'solid') echo 'style="display: none;"'; ?><!-->
+<!--                <th scope="row" valign="top">-->
+<!--                    <label for="solid_logging">Logging:</label>-->
+<!--                </th>-->
+<!--                <td>-->
+<!--                    <select id="solid_logging" name="solid_logging">-->
+<!--                        <option value="no" --><?php //if ($values['solid_logging'] !== 'yes') echo 'selected="selected"'; ?><!-->
+<!--                            No-->
+<!--                        </option>-->
+<!--                        <option value="yes" --><?php //if ($values['solid_logging'] === 'yes') echo 'selected="selected"'; ?><!-->
+<!--                            Yes-->
+<!--                        </option>-->
+<!--                    </select>-->
+<!--                </td>-->
+<!--            </tr>-->
             <tr class="gateway gateway_solid" <?php if ($gateway !== 'solid') echo 'style="display: none;"'; ?>>
                 <th scope="row" valign="top">
                     <label for="solid_integration_type">Integration Type:</label>
@@ -439,11 +439,11 @@ if (!class_exists('PMProGateway_Solid')) {
             $type = $_GET['type'];
 
             if ($request_headers['SIGNATURE'] == self::validate_signature($request_body)) {
-                PMProGateway_Solid_Logger::debug('Incoming webhook: ' . print_r($request_headers, true) . "\n" . print_r($request_body, true));
+//                PMProGateway_Solid_Logger::debug('Incoming webhook: ' . print_r($request_headers, true) . "\n" . print_r($request_body, true));
                 $hook->process_webhook($type, $request_body);
                 status_header(200);
             } else {
-                PMProGateway_Solid_Logger::debug('Incoming webhook failed validation: ' . print_r($request_body, true));
+//                PMProGateway_Solid_Logger::debug('Incoming webhook failed validation: ' . print_r($request_body, true));
 
                 status_header(204);
             }
@@ -514,7 +514,7 @@ if (!class_exists('PMProGateway_Solid')) {
             if (isset($product['error'])) {
                 $error = $product['error'];
                 $error_message = $error['message'] . ' (' . $error['code'] . ')';
-                PMProGateway_Solid_Logger::debug('Error creating product: ' . $error_message);
+//                PMProGateway_Solid_Logger::debug('Error creating product: ' . $error_message);
                 return;
             }
 
@@ -540,11 +540,11 @@ if (!class_exists('PMProGateway_Solid')) {
                 if (isset($price['error'])) {
                     $error = $price['error'];
                     $error_message = $error['message'] . ' (' . $error['code'] . ')';
-                    PMProGateway_Solid_Logger::debug('Error creating price: ' . $error_message);
+//                    PMProGateway_Solid_Logger::debug('Error creating price: ' . $error_message);
                     return;
                 }
             } else {
-                PMProGateway_Solid_Logger::debug('Product UUID is empty');
+//                PMProGateway_Solid_Logger::debug('Product UUID is empty');
             }
         }
 
@@ -625,7 +625,7 @@ if (!class_exists('PMProGateway_Solid')) {
 
             $response = $api->cancelSubscription($data);
 
-            PMProGateway_Solid_Logger::debug('Cancel subscription response: ' . print_r($response, true));
+//            PMProGateway_Solid_Logger::debug('Cancel subscription response: ' . print_r($response, true));
 
             if (!is_wp_error($response)) {
                 $body = json_decode($response, true);
@@ -666,7 +666,7 @@ if (!class_exists('PMProGateway_Solid')) {
                 }
                 $subscription->save();
             } else {
-                PMProGateway_Solid_Logger::debug('Error getting subscription status: ' . print_r($status, true));
+//                PMProGateway_Solid_Logger::debug('Error getting subscription status: ' . print_r($status, true));
                 $subscription->set('status', 'sync_error');
             }
         }

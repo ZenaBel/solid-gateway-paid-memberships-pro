@@ -2,7 +2,7 @@
 /*
 Plugin Name: PMPro Solid Gateway
 Description: Custom gateway for Paid Memberships Pro
-Version: 0.0.1
+Version: 0.0.3
 Author: CoDi
 */
 
@@ -18,10 +18,6 @@ require_once __DIR__ . '/includes/functions.php';
 require_once __DIR__ . '/includes/hooks.php';
 require_once __DIR__ . '/includes/model.php';
 require_once __DIR__ . '/includes/pmpro-gateway-solid.php';
-
-if ( is_admin() ) {
-    require_once __DIR__ . '/includes/pmpro-gateway-solid-admin.php';
-}
 
 add_action('init', function() {
     PMProGateway_Solid::init();
